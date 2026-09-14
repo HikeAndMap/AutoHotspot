@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- The 10.0.19041.0 suffix gives direct access to the Windows Runtime APIs used for
+         the Wi-Fi radio (Windows.Devices.Radios) and Mobile hotspot
+         (Windows.Networking.NetworkOperators) without any NuGet package. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationIcon>AutoHotspot.ico</ApplicationIcon>
+    <RootNamespace>AutoHotspot</RootNamespace>
+    <AssemblyName>AutoHotspot</AssemblyName>
+    <Product>AutoHotspot</Product>
+    <AssemblyTitle>AutoHotspot</AssemblyTitle>
+    <Description>Keeps the Windows Mobile hotspot switched on.</Description>
+    <Company>HikeAndMap</Company>
+    <Copyright>Copyright (c) 2026 HikeAndMap</Copyright>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="AutoHotspot.ico" LogicalName="AutoHotspot.ico" />
+  </ItemGroup>
+
+</Project>
