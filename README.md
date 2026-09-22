@@ -4,6 +4,18 @@ Keeps the Windows **Mobile hotspot** switched on: it starts at every sign-in, tu
 
 <img src="AutoHotspot/AutoHotspot.ico" width="64" alt="AutoHotspot icon">
 
+## Download
+
+**[Download AutoHotspot.exe](https://github.com/HikeAndMap/AutoHotspot/releases/latest/download/AutoHotspot.exe)** (64-bit Windows 10 version 2004 or later, or Windows 11)
+
+One file, no installer and no .NET needed. Put it anywhere you like, such as your Documents folder, run it, and switch it on. It doesn't need administrator rights, and uninstalling means switching it off in the dialog and deleting the file.
+
+The exe isn't code-signed, so the first time you run it Windows shows *"Windows protected your PC"*. Click **More info**, then **Run anyway**. You can check the download against the SHA256 listed on the [release page](https://github.com/HikeAndMap/AutoHotspot/releases/latest):
+
+```powershell
+Get-FileHash .\AutoHotspot.exe -Algorithm SHA256
+```
+
 ## Why
 
 Windows has no built-in "always on" option for Mobile hotspot. After a restart it stays off, it won't start while Wi-Fi is switched off, and its power-saving setting turns it off when no devices are connected. AutoHotspot takes care of all three.
