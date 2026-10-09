@@ -56,6 +56,47 @@ internal static class HotspotController
         return NetworkOperatorTetheringManager.CreateFromConnectionProfile(profile).TetheringOperationalState;
     }
 
+    /// <summary>
+    /// Switches the hotspot off through the same tethering API and waits until it reports Off.
+    /// Returns false when it was not on (or there is no connection to read it from).
+    /// </summary>
+    public static bool StopIfOn(TimeSpan timeout)
+    {
+        ConnectionProfile? profile = FindShareableProfile(out _);
+        if (profile == null)
+            return false;
+
+        NetworkOperatorTetheringManager manager = NetworkOperatorTetheringManager.CreateFromConnectionProfile(profile);
+        if (manager.TetheringOperationalState != TetheringOperationalState.On)
+            return false;
+
+        NetworkOperatorTetheringOperationResult result = manager.StopTetheringAsync().AsTask().GetAwaiter().GetResult();
+        if (result.Status != TetheringOperationStatus.Success)
+            throw new InvalidOperationException($"Stopping the hotspot failed: {result.Status}.");
+
+        DateTime deadline = DateTime.UtcNow + timeout;
+        while (manager.TetheringOperationalState != TetheringOperationalState.Off)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException("The hotspot did not switch off in time.");
+            Thread.Sleep(250);
+        }
+        return true;
+    }
+
+    /// <summary>Calls <see cref="EnsureOn"/> until the hotspot is on, or throws when it still is not after <paramref name="timeout"/>.</summary>
+    public static void StartAndWait(TimeSpan timeout)
+    {
+        DateTime deadline = DateTime.UtcNow + timeout;
+        HotspotAttempt attempt;
+        while (!(attempt = EnsureOn()).IsOn)
+        {
+            if (DateTime.UtcNow > deadline)
+                throw new TimeoutException($"The hotspot did not start: {attempt.Message}");
+            Thread.Sleep(1000);
+        }
+    }
+
     /// <summary>Turns every Wi-Fi radio on. Returns null on success, otherwise the reason it can't be done yet.</summary>
     private static string? EnsureWifiRadioOn()
     {

@@ -35,6 +35,10 @@ partial class FormMain
         buttonStartKeepAlive = new Button();
         labelKeepAliveValue = new Label();
         labelKeepAliveCaption = new Label();
+        labelHotspotIpValue = new Label();
+        labelHotspotIpCaption = new Label();
+        buttonChangeIp = new Button();
+        toolTip = new ToolTip(components);
         labelHotspotValue = new Label();
         labelHotspotCaption = new Label();
         labelNote = new Label();
@@ -67,6 +71,9 @@ partial class FormMain
         //
         // groupBoxStatus
         //
+        groupBoxStatus.Controls.Add(buttonChangeIp);
+        groupBoxStatus.Controls.Add(labelHotspotIpValue);
+        groupBoxStatus.Controls.Add(labelHotspotIpCaption);
         groupBoxStatus.Controls.Add(buttonStartKeepAlive);
         groupBoxStatus.Controls.Add(labelKeepAliveValue);
         groupBoxStatus.Controls.Add(labelKeepAliveCaption);
@@ -74,10 +81,38 @@ partial class FormMain
         groupBoxStatus.Controls.Add(labelHotspotCaption);
         groupBoxStatus.Location = new Point(16, 194);
         groupBoxStatus.Name = "groupBoxStatus";
-        groupBoxStatus.Size = new Size(468, 88);
+        groupBoxStatus.Size = new Size(468, 124);
         groupBoxStatus.TabIndex = 2;
         groupBoxStatus.TabStop = false;
         groupBoxStatus.Text = "Status";
+        //
+        // labelHotspotIpCaption
+        //
+        labelHotspotIpCaption.AutoSize = true;
+        labelHotspotIpCaption.Location = new Point(12, 88);
+        labelHotspotIpCaption.Name = "labelHotspotIpCaption";
+        labelHotspotIpCaption.Size = new Size(72, 15);
+        labelHotspotIpCaption.TabIndex = 5;
+        labelHotspotIpCaption.Text = "Hotspot IP:";
+        //
+        // labelHotspotIpValue
+        //
+        labelHotspotIpValue.AutoEllipsis = true;
+        labelHotspotIpValue.Location = new Point(130, 80);
+        labelHotspotIpValue.Name = "labelHotspotIpValue";
+        labelHotspotIpValue.Size = new Size(184, 34);
+        labelHotspotIpValue.TabIndex = 6;
+        labelHotspotIpValue.Text = "-";
+        //
+        // buttonChangeIp
+        //
+        buttonChangeIp.Location = new Point(324, 84);
+        buttonChangeIp.Name = "buttonChangeIp";
+        buttonChangeIp.Size = new Size(132, 27);
+        buttonChangeIp.TabIndex = 7;
+        buttonChangeIp.Text = "Change IP...";
+        buttonChangeIp.UseVisualStyleBackColor = true;
+        buttonChangeIp.Click += buttonChangeIp_Click;
         //
         // buttonStartKeepAlive
         //
@@ -129,16 +164,16 @@ partial class FormMain
         // labelNote
         //
         labelNote.ForeColor = SystemColors.GrayText;
-        labelNote.Location = new Point(16, 292);
+        labelNote.Location = new Point(16, 328);
         labelNote.Name = "labelNote";
-        labelNote.Size = new Size(468, 34);
+        labelNote.Size = new Size(468, 82);
         labelNote.TabIndex = 3;
-        labelNote.Text = "Runs when you sign in, not before. The hotspot name and password are set in Windows Settings.";
+        labelNote.Text = "Runs when you sign in, not before. The hotspot name and password are set in Windows Settings.\r\n\r\n192.168.137.x is the range Microsoft reserves for the Mobile hotspot, so your network or IT should not use it. Changing the hotspot IP is a workaround.";
         //
         // linkLabelHotspotSettings
         //
         linkLabelHotspotSettings.AutoSize = true;
-        linkLabelHotspotSettings.Location = new Point(16, 340);
+        linkLabelHotspotSettings.Location = new Point(16, 422);
         linkLabelHotspotSettings.Name = "linkLabelHotspotSettings";
         linkLabelHotspotSettings.Size = new Size(172, 15);
         linkLabelHotspotSettings.TabIndex = 4;
@@ -149,7 +184,7 @@ partial class FormMain
         // linkLabelOpenLog
         //
         linkLabelOpenLog.AutoSize = true;
-        linkLabelOpenLog.Location = new Point(210, 340);
+        linkLabelOpenLog.Location = new Point(210, 422);
         linkLabelOpenLog.Name = "linkLabelOpenLog";
         linkLabelOpenLog.Size = new Size(57, 15);
         linkLabelOpenLog.TabIndex = 5;
@@ -160,7 +195,7 @@ partial class FormMain
         // buttonClose
         //
         buttonClose.DialogResult = DialogResult.Cancel;
-        buttonClose.Location = new Point(394, 334);
+        buttonClose.Location = new Point(394, 416);
         buttonClose.Name = "buttonClose";
         buttonClose.Size = new Size(90, 27);
         buttonClose.TabIndex = 6;
@@ -178,7 +213,7 @@ partial class FormMain
         AutoScaleDimensions = new SizeF(7F, 15F);
         AutoScaleMode = AutoScaleMode.Font;
         CancelButton = buttonClose;
-        ClientSize = new Size(500, 376);
+        ClientSize = new Size(500, 458);
         Controls.Add(buttonClose);
         Controls.Add(linkLabelOpenLog);
         Controls.Add(linkLabelHotspotSettings);
@@ -193,6 +228,7 @@ partial class FormMain
         StartPosition = FormStartPosition.CenterScreen;
         Text = "AutoHotspot";
         Load += FormMain_Load;
+        FormClosed += FormMain_FormClosed;
         groupBoxStatus.ResumeLayout(false);
         groupBoxStatus.PerformLayout();
         ResumeLayout(false);
@@ -206,6 +242,10 @@ partial class FormMain
     private GroupBox groupBoxStatus;
     private Label labelHotspotCaption;
     private Label labelHotspotValue;
+    private Label labelHotspotIpCaption;
+    private Label labelHotspotIpValue;
+    private Button buttonChangeIp;
+    private ToolTip toolTip;
     private Label labelKeepAliveCaption;
     private Label labelKeepAliveValue;
     private Button buttonStartKeepAlive;

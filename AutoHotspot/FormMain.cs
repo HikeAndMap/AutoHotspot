@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.NetworkInformation;
 using Windows.Networking.NetworkOperators;
 
 namespace AutoHotspot;
@@ -8,6 +9,7 @@ public partial class FormMain : Form
 {
     private bool loading;
     private bool statusRefreshRunning;
+    private bool ipRefreshRunning;
 
     public FormMain()
     {
@@ -26,6 +28,90 @@ public partial class FormMain : Form
 
         timerStatus.Start();
         timerStatus_Tick(this, EventArgs.Empty);
+
+        // The hotspot IP only changes when Windows reports an address change, so no polling for it.
+        NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+        _ = RefreshHotspotIpAsync();
+    }
+
+    private void FormMain_FormClosed(object? sender, FormClosedEventArgs e)
+    {
+        NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged;
+    }
+
+    private void OnNetworkAddressChanged(object? sender, EventArgs e)
+    {
+        if (!IsDisposed && IsHandleCreated)
+            BeginInvoke(() => _ = RefreshHotspotIpAsync());
+    }
+
+    private async Task RefreshHotspotIpAsync()
+    {
+        if (ipRefreshRunning)
+            return;
+        ipRefreshRunning = true;
+        try
+        {
+            string text;
+            string detail = "";
+            bool problem = false;
+            try
+            {
+                HotspotIpReport report = await Task.Run(() => HotspotNetwork.Read().Analyze());
+                if (report.Actual == null)
+                {
+                    text = $"{report.ConfiguredAddress} (used when the hotspot is on)";
+                }
+                else if (report.AddressMismatch)
+                {
+                    text = $"Set to {report.ConfiguredAddress}, still using {report.Actual.Address}";
+                }
+                else
+                {
+                    text = report.Actual.Address.ToString();
+                }
+
+                if (report.Conflicts.Count > 0)
+                {
+                    text += $". Conflicts with \"{report.Conflicts[0].Other.InterfaceName}\"";
+                }
+                problem = report.Issues.Count > 0;
+                detail = string.Join("\n", report.Issues.Select(i => i.Message));
+            }
+            catch (Exception ex)
+            {
+                text = $"Unknown ({ex.Message})";
+            }
+
+            if (IsDisposed)
+                return;
+            labelHotspotIpValue.Text = text;
+            labelHotspotIpValue.ForeColor = problem ? Color.Firebrick : SystemColors.ControlText;
+            toolTip.SetToolTip(labelHotspotIpValue, detail.Length > 0 ? detail : text);
+        }
+        finally
+        {
+            ipRefreshRunning = false;
+        }
+    }
+
+    private async void buttonChangeIp_Click(object? sender, EventArgs e)
+    {
+        buttonChangeIp.Enabled = false;
+        try
+        {
+            await HotspotIpChangeFlow.RunAsync(this);
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"Changing the hotspot IP failed: {ex.Message}");
+            MessageBox.Show(this, $"Could not change the hotspot IP:\n\n{ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            buttonChangeIp.Enabled = true;
+        }
+        await RefreshHotspotIpAsync();
     }
 
     private void toggleRowEnabled_CheckedChanged(object? sender, EventArgs e)

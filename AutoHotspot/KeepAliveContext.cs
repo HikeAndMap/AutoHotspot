@@ -14,6 +14,8 @@ internal sealed class KeepAliveContext : ApplicationContext
 
     private readonly NotifyIcon trayIcon;
     private readonly EventWaitHandle stopEvent;
+    private readonly EventWaitHandle pauseEvent;
+    private readonly HotspotIpMonitor ipMonitor;
     private readonly Timer tickTimer;
 
     private DateTime nextAttemptUtc = DateTime.MinValue;
@@ -22,14 +24,19 @@ internal sealed class KeepAliveContext : ApplicationContext
     private string? lastMessage;
     private bool waitingNotificationShown;
     private bool startedNotificationShown;
+    private bool balloonOffersIpChange;
+    private DateTime? pausedSinceUtc;
 
     public KeepAliveContext()
     {
         stopEvent = new EventWaitHandle(false, EventResetMode.ManualReset, Program.StopEventName);
         stopEvent.Reset(); // this instance owns the keep-alive mutex, so any earlier stop request is stale
+        pauseEvent = new EventWaitHandle(false, EventResetMode.ManualReset, Program.PauseEventName);
+        pauseEvent.Reset();
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open AutoHotspot", null, (_, _) => OpenDialog());
+        menu.Items.Add("Change hotspot IP...", null, (_, _) => ChangeHotspotIp());
         menu.Items.Add("Open log", null, (_, _) => OpenLog());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Stop until next sign-in", null, (_, _) => Stop("stopped from the tray menu"));
@@ -42,6 +49,11 @@ internal sealed class KeepAliveContext : ApplicationContext
             Visible = true,
         };
         trayIcon.DoubleClick += (_, _) => OpenDialog();
+        trayIcon.BalloonTipClicked += (_, _) =>
+        {
+            if (balloonOffersIpChange)
+                ChangeHotspotIp();
+        };
 
         Log.Write($"Keep-alive started (process {Environment.ProcessId}).");
 
@@ -50,6 +62,56 @@ internal sealed class KeepAliveContext : ApplicationContext
         tickTimer = new Timer { Interval = 1000 };
         tickTimer.Tick += OnTick;
         tickTimer.Start();
+
+        ipMonitor = new HotspotIpMonitor(IsPaused);
+        ipMonitor.NewIssues += OnNewHotspotIpIssues;
+        ipMonitor.Start();
+    }
+
+    /// <summary>
+    /// True while an elevated hotspot IP change is restarting the hotspot. A change that never
+    /// clears the signal (for example because it was killed) stops pausing us after a few minutes.
+    /// </summary>
+    private bool IsPaused()
+    {
+        if (!pauseEvent.WaitOne(0))
+        {
+            pausedSinceUtc = null;
+            return false;
+        }
+
+        pausedSinceUtc ??= DateTime.UtcNow;
+        if (DateTime.UtcNow - pausedSinceUtc > TimeSpan.FromMinutes(3))
+        {
+            pauseEvent.Reset();
+            pausedSinceUtc = null;
+            Log.Write("A hotspot IP change did not finish in 3 minutes; resuming the keep-alive loop.");
+            return false;
+        }
+        return true;
+    }
+
+    private void OnNewHotspotIpIssues(IReadOnlyList<HotspotIpIssue> issues)
+    {
+        const string suffix = " Click to change the hotspot IP.";
+        string text = string.Join(" ", issues.Select(i => i.Message));
+        if (text.Length > 250 - suffix.Length) // balloon text limit is 255 characters
+            text = text[..(250 - suffix.Length - 3)] + "...";
+        text += suffix;
+        balloonOffersIpChange = true;
+        trayIcon.ShowBalloonTip(15000, "Mobile hotspot IP problem", text, ToolTipIcon.Warning);
+    }
+
+    private async void ChangeHotspotIp()
+    {
+        try
+        {
+            await HotspotIpChangeFlow.RunAsync(null);
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"Changing the hotspot IP failed: {ex.Message}");
+        }
     }
 
     private async void OnTick(object? sender, EventArgs e)
@@ -60,7 +122,7 @@ internal sealed class KeepAliveContext : ApplicationContext
             return;
         }
 
-        if (attemptRunning || DateTime.UtcNow < nextAttemptUtc)
+        if (attemptRunning || DateTime.UtcNow < nextAttemptUtc || IsPaused())
             return;
 
         attemptRunning = true;
@@ -100,12 +162,14 @@ internal sealed class KeepAliveContext : ApplicationContext
         if (!attempt.IsOn && !waitingNotificationShown)
         {
             waitingNotificationShown = true;
+            balloonOffersIpChange = false;
             trayIcon.ShowBalloonTip(10000, "Mobile hotspot isn't on yet",
                 $"{attempt.Message} AutoHotspot keeps trying in the background.", ToolTipIcon.Info);
         }
         else if (attempt.IsOn && waitingNotificationShown && !startedNotificationShown)
         {
             startedNotificationShown = true;
+            balloonOffersIpChange = false;
             trayIcon.ShowBalloonTip(10000, "Mobile hotspot is on", attempt.Message, ToolTipIcon.Info);
         }
     }
@@ -136,6 +200,7 @@ internal sealed class KeepAliveContext : ApplicationContext
     protected override void ExitThreadCore()
     {
         tickTimer.Stop();
+        ipMonitor.Dispose();
         trayIcon.Visible = false;
         base.ExitThreadCore();
     }
@@ -148,6 +213,7 @@ internal sealed class KeepAliveContext : ApplicationContext
             trayIcon.ContextMenuStrip?.Dispose();
             trayIcon.Dispose();
             stopEvent.Dispose();
+            pauseEvent.Dispose();
         }
         base.Dispose(disposing);
     }
