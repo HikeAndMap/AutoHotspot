@@ -157,7 +157,9 @@ public partial class FormMain : Form
     private async void timerStatus_Tick(object? sender, EventArgs e)
     {
         bool keepAliveRunning = KeepAliveProcess.IsRunning;
-        labelKeepAliveValue.Text = keepAliveRunning ? "Running, keeping the hotspot on" : "Not running";
+        labelKeepAliveValue.Text = !keepAliveRunning ? "Not running"
+            : KeepAliveProcess.IsManuallyStopped ? "Running, hotspot stopped from the tray icon"
+            : "Running, keeping the hotspot on";
         buttonStartKeepAlive.Visible = toggleRowEnabled.Checked && !keepAliveRunning;
 
         if (statusRefreshRunning)

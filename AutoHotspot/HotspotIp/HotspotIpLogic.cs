@@ -55,7 +55,7 @@ internal sealed record HotspotIpReport(
             if (AddressMismatch)
             {
                 issues.Add(new HotspotIpIssue($"mismatch|{ConfiguredAddress}|{Actual!.Address}",
-                    $"The hotspot is set to {ConfiguredAddress}, but its adapter still uses {Actual.Address}. Windows applies the new address when the hotspot service restarts."));
+                    $"The hotspot is set to {ConfiguredAddress}, but its adapter still uses {Actual.Address}. Older Windows versions apply it when the hotspot service restarts; recent Windows 11 versions ignore it."));
             }
             issues.AddRange(Conflicts.Select(c => new HotspotIpIssue(c.Key, c.Describe())));
             return issues;

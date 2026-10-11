@@ -1,6 +1,6 @@
 # AutoHotspot
 
-Keeps the Windows **Mobile hotspot** switched on: it starts at every sign-in, turns Wi-Fi on when it's off, retries until the network is ready, and switches the hotspot back on within seconds whenever Windows turns it off. It also warns you when the hotspot's IP range collides with another network on your PC, which Windows never tells you about, and can move the hotspot to a free range.
+Keeps the Windows **Mobile hotspot** switched on: it starts at every sign-in, turns Wi-Fi on when it's off, retries until the network is ready, and switches the hotspot back on within seconds whenever Windows turns it off. It also warns you when the hotspot's IP range collides with another network on your PC, which Windows never tells you about, and on Windows versions that allow it can move the hotspot to a free range.
 
 <img src="AutoHotspot/AutoHotspot.ico" width="64" alt="AutoHotspot icon">
 
@@ -63,9 +63,11 @@ The background instance checks this at sign-in and again whenever Windows report
 - the IPv4 address of every other network adapter (VPN adapters included), and
 - the routing table, so a VPN route that covers the range counts too.
 
-It reads the range the hotspot is set to from `HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters` (`ScopeAddress`, falling back to Microsoft's default `192.168.137.1`) and the address the hotspot's virtual adapter (for example `Local Area Connection* 10`) really has. It also reports when the two differ, which happens when the setting was changed but the Windows sharing service (`SharedAccess`) was not restarted.
+It reads the range the hotspot is set to from `HKLM\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters` (`ScopeAddress`, falling back to Microsoft's default `192.168.137.1`) and the address the hotspot's virtual adapter (for example `Local Area Connection* 10`) really has. It also reports when the two differ, which happens when the setting was changed but the Windows sharing service (`SharedAccess`) was not restarted, or when Windows ignores the setting (see below).
 
-When it finds a problem, a notification names the adapter or route and the subnet it collides with. The same problem is announced once per sign-in. Click the notification, use **Change hotspot IP...** in the tray menu, or press **Change IP...** in the dialog (which also shows the current hotspot IP and flags problems in red).
+When it finds a problem, a notification names the adapter or route and the subnet it collides with. The same problem is announced once per sign-in. Click the notification, use **Change hotspot IP...** in the tray menu, or press **Change IP...** in the dialog (which also shows the current hotspot IP and flags problems in red). When there is no problem, **Change IP...** says so and changes nothing.
+
+> **Recent Windows 11 versions can't move the hotspot range.** On Windows 11 24H2/25H2 (build 26100 and later) the Mobile hotspot always gives connected devices `192.168.137.x`, whatever `ScopeAddress` says; even a reboot doesn't change that. On those versions **Change IP...** notices that the adapter kept its old address, puts the previous setting back and tells you. The conflict warning still works, and the only real fix is for the network or IT department not to use `192.168.137.x`.
 
 **Change IP...** does this:
 
@@ -73,7 +75,7 @@ When it finds a problem, a notification names the adapter or route and the subne
 2. Shows it to you and asks for confirmation. Nothing happens before you say yes.
 3. Asks Windows for permission (UAC) and runs an elevated copy of the exe that: switches the hotspot off, stops the `SharedAccess` service, writes both `ScopeAddress` and `ScopeAddressBackup`, starts the service, switches the hotspot on, and finally reads the hotspot adapter's real address again.
 
-If a step fails, the previous registry values are restored and the service and hotspot are brought back, so a failed change never leaves sharing stopped. If the adapter still shows the old address afterwards, AutoHotspot tells you that restarting Windows may be necessary. The background keep-alive loop pauses while the change runs, so it doesn't start the hotspot halfway through.
+If a step fails, or the adapter still shows the old address afterwards (Windows ignored the setting), the previous registry values are restored and the service and hotspot are brought back, so a failed change never leaves sharing stopped or a setting behind that Windows doesn't use. The background keep-alive loop pauses while the change runs, so it doesn't start the hotspot halfway through.
 
 Devices connected to the hotspot reconnect on their own after the change. The hotspot name and password stay the same.
 
@@ -82,9 +84,10 @@ Devices connected to the hotspot reconnect on their own after the change. The ho
 While the background instance runs it shows a tray icon. Hover over it for the current status. Right-click it to:
 
 - **Open AutoHotspot** (opens the dialog)
+- **Start hotspot** / **Stop hotspot (no automatic restart)**: *Stop* switches the hotspot off and keeps it off; the tray icon stays. *Start* switches it on again and resumes keeping it on. A stop lasts until you choose *Start* or until the next sign-in.
 - **Change hotspot IP...** (see [Hotspot IP conflicts](#hotspot-ip-conflicts))
 - **Open log**
-- **Stop until next sign-in**
+- **Exit until next sign-in** (closes the background instance and its tray icon; the hotspot is left as it is)
 
 When you **disable** it in the dialog, the sign-in entry is removed and the running background instance stops.
 

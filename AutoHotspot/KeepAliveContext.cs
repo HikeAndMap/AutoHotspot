@@ -15,11 +15,16 @@ internal sealed class KeepAliveContext : ApplicationContext
     private readonly NotifyIcon trayIcon;
     private readonly EventWaitHandle stopEvent;
     private readonly EventWaitHandle pauseEvent;
+    private readonly EventWaitHandle manualStopEvent;
     private readonly HotspotIpMonitor ipMonitor;
     private readonly Timer tickTimer;
+    private readonly ToolStripMenuItem startItem;
+    private readonly ToolStripMenuItem stopItem;
 
     private DateTime nextAttemptUtc = DateTime.MinValue;
     private bool attemptRunning;
+    private bool manuallyStopped;
+    private bool switching;
     private bool? lastIsOn;
     private string? lastMessage;
     private bool waitingNotificationShown;
@@ -33,13 +38,27 @@ internal sealed class KeepAliveContext : ApplicationContext
         stopEvent.Reset(); // this instance owns the keep-alive mutex, so any earlier stop request is stale
         pauseEvent = new EventWaitHandle(false, EventResetMode.ManualReset, Program.PauseEventName);
         pauseEvent.Reset();
+        manualStopEvent = new EventWaitHandle(false, EventResetMode.ManualReset, Program.ManualStopEventName);
+        manualStopEvent.Reset();
+
+        startItem = new ToolStripMenuItem("Start hotspot", null, (_, _) => StartHotspot());
+        stopItem = new ToolStripMenuItem("Stop hotspot (no automatic restart)", null, (_, _) => StopHotspot());
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open AutoHotspot", null, (_, _) => OpenDialog());
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(startItem);
+        menu.Items.Add(stopItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Change hotspot IP...", null, (_, _) => ChangeHotspotIp());
         menu.Items.Add("Open log", null, (_, _) => OpenLog());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Stop until next sign-in", null, (_, _) => Stop("stopped from the tray menu"));
+        menu.Items.Add("Exit until next sign-in", null, (_, _) => Stop("exited from the tray menu"));
+        menu.Opening += (_, _) =>
+        {
+            startItem.Enabled = manuallyStopped && !switching;
+            stopItem.Enabled = !manuallyStopped && !switching;
+        };
 
         trayIcon = new NotifyIcon
         {
@@ -122,7 +141,7 @@ internal sealed class KeepAliveContext : ApplicationContext
             return;
         }
 
-        if (attemptRunning || DateTime.UtcNow < nextAttemptUtc || IsPaused())
+        if (manuallyStopped || attemptRunning || DateTime.UtcNow < nextAttemptUtc || IsPaused())
             return;
 
         attemptRunning = true;
@@ -149,8 +168,60 @@ internal sealed class KeepAliveContext : ApplicationContext
         }
     }
 
+    /// <summary>
+    /// Switches the hotspot off and stops the keep-alive loop from switching it back on, until
+    /// <see cref="StartHotspot"/> or the next sign-in. The tray icon stays.
+    /// </summary>
+    private async void StopHotspot()
+    {
+        if (manuallyStopped || switching)
+            return;
+
+        switching = true;
+        manuallyStopped = true;
+        manualStopEvent.Set();
+        Log.Write("Hotspot stopped from the tray menu; it is not restarted automatically until Start is chosen.");
+        SetTrayText("AutoHotspot: stopped. Right-click > Start hotspot to turn it back on");
+        try
+        {
+            // An attempt that is already running could switch the hotspot on right after we switch it off.
+            while (attemptRunning)
+                await Task.Delay(100);
+
+            await Task.Run(() => HotspotController.StopIfOn(TimeSpan.FromSeconds(15)));
+        }
+        catch (Exception ex)
+        {
+            Log.Write($"Stopping the hotspot failed: {ex.Message}");
+            balloonOffersIpChange = false;
+            trayIcon.ShowBalloonTip(10000, "Could not stop the Mobile hotspot", ex.Message, ToolTipIcon.Warning);
+        }
+        finally
+        {
+            switching = false;
+        }
+    }
+
+    /// <summary>Lifts a manual stop: the keep-alive loop switches the hotspot on right away and keeps it on again.</summary>
+    private void StartHotspot()
+    {
+        if (!manuallyStopped || switching)
+            return;
+
+        manuallyStopped = false;
+        manualStopEvent.Reset();
+        lastIsOn = null;
+        lastMessage = null;
+        nextAttemptUtc = DateTime.MinValue;
+        Log.Write("Hotspot started from the tray menu; keeping it on again.");
+        SetTrayText("AutoHotspot: starting");
+    }
+
     private void HandleAttempt(HotspotAttempt attempt)
     {
+        if (manuallyStopped)
+            return; // StopHotspot waits for this attempt and then switches the hotspot off
+
         if (attempt.IsOn != lastIsOn || attempt.Message != lastMessage)
         {
             Log.Write(attempt.Message);
@@ -214,6 +285,7 @@ internal sealed class KeepAliveContext : ApplicationContext
             trayIcon.Dispose();
             stopEvent.Dispose();
             pauseEvent.Dispose();
+            manualStopEvent.Dispose();
         }
         base.Dispose(disposing);
     }

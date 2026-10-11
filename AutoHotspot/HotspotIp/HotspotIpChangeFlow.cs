@@ -42,6 +42,14 @@ internal static class HotspotIpChangeFlow
             }
 
             HotspotIpReport report = snapshot.Analyze();
+            if (report.Issues.Count == 0)
+            {
+                string current = (report.Actual?.Address ?? report.ConfiguredAddress).ToString();
+                MessageBox.Show(owner, $"The hotspot uses {current} and nothing else on this PC uses that range, so there is nothing to change.\n\n" + ItNote,
+                    Caption, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             Ipv4Subnet? proposal = HotspotIpLogic.ProposeSubnet(report, snapshot.Others);
             if (proposal == null)
             {
@@ -68,15 +76,9 @@ internal static class HotspotIpChangeFlow
     public static string BuildConfirmation(HotspotIpReport report, Ipv4Subnet proposal)
     {
         var text = new System.Text.StringBuilder();
-        IReadOnlyList<HotspotIpIssue> issues = report.Issues;
-        if (issues.Count == 0)
-            text.AppendLine("No hotspot IP problem was found right now.").AppendLine();
-        else
-        {
-            foreach (HotspotIpIssue issue in issues)
-                text.AppendLine("- " + issue.Message);
-            text.AppendLine();
-        }
+        foreach (HotspotIpIssue issue in report.Issues)
+            text.AppendLine("- " + issue.Message);
+        text.AppendLine();
 
         bool isConfiguredAddress = proposal == report.ConfiguredSubnet;
         text.AppendLine(isConfiguredAddress
@@ -84,6 +86,8 @@ internal static class HotspotIpChangeFlow
             : $"Suggested hotspot address: {proposal.FirstHost} (range {proposal}). Nothing else on this PC uses it.");
         text.AppendLine();
         text.AppendLine("Windows will ask for permission (UAC). The hotspot is then switched off for a few seconds, its sharing service restarts and the hotspot comes back on; connected devices reconnect on their own.");
+        text.AppendLine();
+        text.AppendLine("Recent Windows 11 versions ignore this setting and keep the hotspot on 192.168.137.x. If that happens, AutoHotspot puts the previous setting back and tells you.");
         text.AppendLine();
         text.AppendLine(ItNote);
         text.AppendLine();
@@ -126,7 +130,8 @@ internal static class HotspotIpChangeFlow
         {
             null => ("Nothing was changed, because the permission prompt was declined.", MessageBoxIcon.Information),
             ChangeIpOutcome.Applied => ($"The hotspot now uses {address}, and it is back on.", MessageBoxIcon.Information),
-            ChangeIpOutcome.AdapterStillOld => ($"The new address {address} is saved and the hotspot was restarted, but Windows still shows {oldAddress} on the hotspot adapter. Restarting the PC may be necessary to apply it.", MessageBoxIcon.Warning),
+            ChangeIpOutcome.WindowsIgnored => ($"Windows kept the hotspot on {oldAddress}. This version of Windows ignores the hotspot IP setting (recent Windows 11 versions always use 192.168.137.x), so the previous setting was put back and the hotspot is on again.\n\n" +
+                "The only fix is for your network or IT department not to use 192.168.137.x, the range Microsoft reserves for the Mobile hotspot.", MessageBoxIcon.Warning),
             ChangeIpOutcome.NotVerified => ($"The new address {address} is saved. The hotspot isn't on right now, so the adapter's address couldn't be checked. It applies when the hotspot starts.", MessageBoxIcon.Information),
             ChangeIpOutcome.NowOverlaps => ($"{address} is now used by something else on this PC, so nothing was changed. Try again to get a new suggestion.", MessageBoxIcon.Warning),
             ChangeIpOutcome.AlreadyRunning => ("Another hotspot IP change is already running.", MessageBoxIcon.Warning),

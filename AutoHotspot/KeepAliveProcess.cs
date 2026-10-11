@@ -23,6 +23,18 @@ internal static class KeepAliveProcess
         }
     }
 
+    /// <summary>True while the running instance has the hotspot stopped from its tray menu.</summary>
+    public static bool IsManuallyStopped
+    {
+        get
+        {
+            if (!EventWaitHandle.TryOpenExisting(Program.ManualStopEventName, out EventWaitHandle? manualStop))
+                return false;
+            using (manualStop)
+                return manualStop.WaitOne(0);
+        }
+    }
+
     /// <summary>Takes the mutex without waiting. An abandoned mutex (owner crashed) counts as acquired.</summary>
     public static bool TryAcquire(Mutex mutex)
     {

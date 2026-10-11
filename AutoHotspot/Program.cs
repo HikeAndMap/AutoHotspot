@@ -17,6 +17,9 @@ internal static class Program
     /// <summary>Signalled by the elevated hotspot IP change while it restarts the hotspot, so the keep-alive instance doesn't fight it.</summary>
     public const string PauseEventName = @"Local\AutoHotspot.Pause";
 
+    /// <summary>Set by the keep-alive instance while the hotspot is stopped from its tray menu, so the dialog can show it.</summary>
+    public const string ManualStopEventName = @"Local\AutoHotspot.ManualStop";
+
     /// <summary>Held by the elevated hotspot IP change so only one runs at a time.</summary>
     public const string ChangeIpMutexName = @"Local\AutoHotspot.ChangeIp";
 

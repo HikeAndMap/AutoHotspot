@@ -17,8 +17,11 @@ internal enum ChangeIpOutcome
     AlreadyRunning = 4,
     NotElevated = 5,
 
-    /// <summary>Saved and the hotspot was restarted, but the adapter still shows the old address.</summary>
-    AdapterStillOld = 10,
+    /// <summary>
+    /// The hotspot was restarted but its adapter kept the old address, so Windows ignores the setting
+    /// (recent Windows 11 versions always use 192.168.137.x). The previous settings were restored.
+    /// </summary>
+    WindowsIgnored = 10,
 
     /// <summary>Saved, but the hotspot is not on, so the adapter's address could not be checked.</summary>
     NotVerified = 11,
@@ -28,7 +31,8 @@ internal enum ChangeIpOutcome
 /// The elevated half of "Change IP": runs as <c>AutoHotspot.exe --set-hotspot-ip a.b.c.d</c> after a
 /// UAC prompt. Stops the hotspot and the SharedAccess service, writes ScopeAddress and
 /// ScopeAddressBackup, starts both again and re-reads the adapter's real address. If a step
-/// fails the old registry values are restored and the service and hotspot are brought back.
+/// fails, or the adapter keeps its old address because Windows ignores the setting, the old
+/// registry values are restored and the service and hotspot are brought back.
 /// </summary>
 internal static class HotspotIpChanger
 {
@@ -161,7 +165,15 @@ internal static class HotspotIpChanger
             return ChangeIpOutcome.Failed;
         }
 
-        return Verify(newAddress, hotspotWasOn);
+        ChangeIpOutcome outcome = Verify(newAddress, hotspotWasOn);
+        if (outcome == ChangeIpOutcome.WindowsIgnored)
+        {
+            // Leaving a setting Windows doesn't use would only make every later check report a mismatch.
+            Log.Write("Restoring the previous settings, because this Windows version does not use them.");
+            Try("stop the hotspot for the rollback", () => HotspotController.StopIfOn(HotspotTimeout));
+            Rollback(service, oldScope, oldBackup, registryTouched: true, hotspotWasOn);
+        }
+        return outcome;
     }
 
     /// <summary>Re-reads the hotspot adapter's real address and reports whether the new one took effect.</summary>
@@ -193,8 +205,8 @@ internal static class HotspotIpChanger
             return ChangeIpOutcome.NotVerified;
         }
 
-        Log.Write($"The hotspot adapter \"{actual.Name}\" still has {actual.Address}; a restart of Windows may be necessary.");
-        return ChangeIpOutcome.AdapterStillOld;
+        Log.Write($"The hotspot adapter \"{actual.Name}\" still has {actual.Address}: Windows ignores the hotspot IP setting.");
+        return ChangeIpOutcome.WindowsIgnored;
     }
 
     /// <summary>
